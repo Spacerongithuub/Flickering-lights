@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Light Pattern Mimic</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: black;
+      margin: 0;
+      color: white;
+      text-align: center;
+    }
+
+    .game-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .lightbulb {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background-color: #f0f0f0; /* Light gray color to look like an unlit bulb */
+      display: inline-block;
+      margin: 20px;
+      opacity: 0.7; /* Slight opacity for the lights */
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.6); /* Glow effect for lights */
+      transition: opacity 0.3s, background-color 0.3s, box-shadow 0.3s;
+    }
+
+    .active {
+      opacity: 1;
+      background-color: #ffff00; /* Bright yellow color to represent a lit bulb */
+      box-shadow: 0 0 15px rgba(255, 255, 0, 0.8); /* Stronger glow effect when active */
+    }
+
+    .clicked {
+      background-color: #ff7f00; /* Orange for clicked bulbs, instead of yellow */
+      box-shadow: 0 0 15px rgba(255, 127, 0, 0.8); /* Glow effect for clicked bulbs */
+    }
+
+    /* Gray lights for Hard to Impossible difficulty */
+    .gray-light {
+      background-color: #808080; /* Gray color for Hard difficulty */
+    }
+
+    .dark-gray-light {
+      background-color: #4d4d4d; /* Darker gray for Extra Hard */
+    }
+
+    .almost-black-light {
+      background-color: #2e2e2e; /* Almost black gray for Impossible */
+      opacity: 0.5; /* Low opacity for difficulty */
+    }
+
+    .score {
+      font-size: 24px;
+    }
+
+    button {
+      padding: 10px 20px;
+      margin-top: 20px;
+      font-size: 16px;
+      cursor: pointer;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      transition: background-color 0.3s;
+    }
+
+    button:hover {
+      background-color: #45a049;
+    }
+
+    /* Difficulty slider styles */
+    .difficulty-container {
+      margin-top: 20px;
+    }
+
+    #difficultySlider {
+      width: 300px;
+    }
+
+    #difficultyLabel {
+      font-size: 18px;
+    }
+
+    /* Message for game over */
+    #gameOverMessage {
+      font-size: 28px;
+      margin-top: 20px;
+    }
+
+  </style>
+</head>
+<body>
+
+<div class="game-container">
+  <h1>Light Pattern Mimic</h1>
+
+  <!-- Game over message (initially hidden) -->
+  <div id="gameOverMessage" style="display: none;"></div>
+
+  <div id="lightbulbs">
+    <div class="lightbulb" id="bulb1" onclick="clickBulb(1)"></div>
+    <div class="lightbulb" id="bulb2" onclick="clickBulb(2)"></div>
+    <div class="lightbulb" id="bulb3" onclick="clickBulb(3)"></div>
+    <div class="lightbulb" id="bulb4" onclick="clickBulb(4)"></div>
+    <div class="lightbulb" id="bulb5" onclick="clickBulb(5)"></div>
+  </div>
+
+  <p class="score">Score: <span id="score">0</span></p>
+
+  <!-- Difficulty Slider -->
+  <div class="difficulty-container" id="difficultyContainer">
+    <label id="difficultyLabel" for="difficultySlider">Difficulty: Easy</label><br>
+    <input type="range" min="0" max="5" value="0" id="difficultySlider" step="1" onchange="updateDifficultyLabel()">
+  </div>
+
+  <button id="startBtn" onclick="startGame()">Start Game</button>
+</div>
+
+<!-- Audio for game sounds -->
+<audio id="successSound" src="https://www.soundjay.com/button/beep-07.wav"></audio>
+<audio id="errorSound" src="https://www.soundjay.com/button/beep-03.wav"></audio>
+<audio id="creepyMusic" loop="true" src="https://www.soundjay.com/button/beep-02.wav"></audio>
+<audio id="flickerSound" src="https://www.soundjay.com/button/beep-01.wav"></audio>
+<audio id="whisperSound" loop="true" src="https://www.soundjay.com/button/beep-04.wav"></audio> <!-- Whisper sound -->
+<audio id="voiceEffect" src="https://www.soundjay.com/button/beep-05.wav"></audio> <!-- Distant voice effect -->
+<!-- Your waiting sound effect URL -->
+<audio id="waitingSound" src="https://jmp.sh/98pCL4yY"></audio>
+
+<script>
+  let sequence = [];
+  let playerSequence = [];
+  let score = 0;
+  let gameStarted = false;
+  let difficultyLevel = 0; // 0 = Easy, 1 = Medium, 2 = Hard, 3 = Extra Hard, 4 = Extra Extra Hard, 5 = Impossible
+
+  // Difficulty levels
+  const difficultySettings = [
+    { label: "Easy", delay: 1000, flicker: false, gray: false, color: "green" }, // Easy
+    { label: "Medium", delay: 800, flicker: false, gray: false, color: "yellow" }, // Medium
+    { label: "Hard", delay: 600, flicker: false, gray: true, color: "orange" }, // Hard
+    { label: "Extra Hard", delay: 400, flicker: false, gray: true, color: "red" }, // Extra Hard
+    { label: "Extra Extra Hard", delay: 200, flicker: true, gray: true, color: "purple" }, // Extra Extra Hard
+    { label: "Impossible", delay: 100, flicker: true, gray: true, color: "red" } // Impossible
+  ];
+
+  // Update the difficulty label and slider color when the slider is changed
+  function updateDifficultyLabel() {
+    const sliderValue = document.getElementById('difficultySlider').value;
+    difficultyLevel = parseInt(sliderValue);
+    document.getElementById('difficultyLabel').innerText = `Difficulty: ${difficultySettings[difficultyLevel].label}`;
+
+    // Change the slider color based on difficulty
+    const slider = document.getElementById('difficultySlider');
+    slider.style.backgroundColor = difficultySettings[difficultyLevel].color;
+  }
+
+  // Start the game
+  function startGame() {
+    score = 0;
+    document.getElementById('score').innerText = score;
+    sequence = [];
+    playerSequence = [];
+    gameStarted = true;
+
+    // Hide the start button
+    document.getElementById('startBtn').style.display = 'none';
+    
+    // Hide the difficulty slider
+    document.getElementById('difficultyContainer').style.display = 'none';
+
+    // Show the game over message container at top (hidden by default)
+    document.getElementById('gameOverMessage').style.display = 'none';
+
+    // Play creepy background music
+    document.getElementById('creepyMusic').play();
+
+    // Play whisper in the background
+    document.getElementById('whisperSound').play();
+
+    generateSequence();
+  }
+
+  // Generate the sequence of lights
+  function generateSequence() {
+    playerSequence = [];
+    const randomBulb = Math.floor(Math.random() * 5) + 1;
+    sequence.push(randomBulb);
+    displaySequence();
+  }
+
+  // Display the sequence
+  function displaySequence() {
+    let index = 0;
+    const interval = setInterval(() => {
+      const bulbId = sequence[index];
+      const bulbElement = document.getElementById(`bulb${bulbId}`);
+      bulbElement.classList.add('active');
+
+      // Apply gray color effects based on difficulty
+      if (difficultySettings[difficultyLevel].gray) {
+        if (difficultyLevel === 5) {
+          bulbElement.classList.add('almost-black-light'); // Almost black gray for Impossible
+        } else if (difficultyLevel === 4) {
+          bulbElement.classList.add('dark-gray-light'); // Dark gray for Extra Hard
+        } else {
+          bulbElement.classList.add('gray-light'); // Light gray for Hard
+        }
+      }
+
+      setTimeout(() => {
+        bulbElement.classList.remove('active');
+        bulbElement.classList.remove('gray-light');
+        bulbElement.classList.remove('dark-gray-light');
+        bulbElement.classList.remove('almost-black-light');
+      }, difficultySettings[difficultyLevel].delay);
+
+      index++;
+      if (index === sequence.length) {
+        clearInterval(interval);
+      }
+    }, difficultySettings[difficultyLevel].delay);
+  }
+
+  // Click on a bulb
+  function clickBulb(bulbId) {
+    if (!gameStarted) return;
+
+    playerSequence.push(bulbId);
+    const currentBulb = sequence[playerSequence.length - 1];
+
+    // If the player clicks the wrong bulb, end the game
+    if (bulbId !== currentBulb) {
+      gameOver();
+    } else {
+      // If the player successfully mimics the sequence so far
+      if (playerSequence.length === sequence.length) {
+        score++;
+        document.getElementById('score').innerText = score;
+        setTimeout(generateSequence, 1000); // Generate next sequence after a short delay
+      }
+    }
+  }
+
+  // End the game
+  function gameOver() {
+    gameStarted = false;
+    document.getElementById('gameOverMessage').innerText = `Game Over! Final Score: ${score}\nDifficulty: ${difficultySettings[difficultyLevel].label}`;
+    document.getElementById('gameOverMessage').style.display = 'block';
+
+    // Show the start button again
+    document.getElementById('startBtn').style.display = 'block';
+    document.getElementById('difficultyContainer').style.display = 'block';
+
+    // Stop the music and sounds
+    document.getElementById('creepyMusic').pause();
+    document.getElementById('whisperSound').pause();
+  }
+</script>
+</body>
+</html>
